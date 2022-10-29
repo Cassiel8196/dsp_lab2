@@ -1,12 +1,9 @@
 from scipy.io import wavfile
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import numpy as np
 import pyaudio
 import wave
 import math
-#from scipy.fft import fft
-import sys  # 导入sys模块
-sys.setrecursionlimit(3000)  # 将默认的递归深度修改为3000
 
 
 from cmath import sin, cos, pi
@@ -170,9 +167,9 @@ def mel(nfilt, sample_rate):   # ipt是一帧，对每一帧mel，帧长加到�
             fbank[m - 1, k] = (k - bin[m - 1]) / (bin[m] - bin[m - 1])
         for k in range(f_m, f_m_plus):
             fbank[m - 1, k] = (bin[m + 1] - k) / (bin[m + 1] - bin[m])
-    """
         plt.plot(freq, fbank[m - 1, :], 'r')  # 频域滤波器波形
     plt.show()
+    """
     # 将filter_bank中的0值改为最小负数，防止运算出现问题，再对每个滤波器的能量取log即得到log梅尔频谱
     filter_banks = np.dot(pow_frames, fbank.T)
     filter_banks = np.where(filter_banks == 0, np.finfo(float).eps, filter_banks)  # Numerical Stability
