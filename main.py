@@ -1,9 +1,61 @@
 from scipy.io import wavfile
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
 import pyaudio
 import wave
-from scipy.fftpack import dct
+import math
+#from scipy.fft import fft
+import sys  # 导入sys模块
+sys.setrecursionlimit(3000)  # 将默认的递归深度修改为3000
+
+
+from cmath import sin, cos, pi
+
+class FFT_pack():
+    def __init__(self, _list=[], N=0):  # _list 是传入的待计算的离散序列，N是序列采样点数，对于本方法，点数必须是2^n才可以得到正确结果
+        self.list = _list  # 初始化数据
+        self.N = N
+        self.total_m = 0  # 序列的总层数
+        self._reverse_list = []  # 位倒序列表
+        self.output =  []  # 计算结果存储列表
+        self._W = []  # 系数因子列表
+        for _ in range(len(self.list)):
+            self._reverse_list.append(self.list[self._reverse_pos(_)])
+        self.output = self._reverse_list.copy()
+        for _ in range(self.N):
+            self._W.append((cos(2 * pi / N) - sin(2 * pi / N) * 1j) ** _)  # 提前计算W值，降低算法复杂度
+
+    def _reverse_pos(self, num) -> int:  # 得到位倒序后的索引
+        out = 0
+        bits = 0
+        _i = self.N
+        data = num
+        while (_i != 0):
+            _i = _i // 2
+            bits += 1
+        for i in range(bits - 1):
+            out = out << 1
+            out |= (data >> i) & 1
+        self.total_m = bits - 1
+        return out
+
+    def FFT(self, _list, N, abs=True) -> list:  # 计算给定序列的傅里叶变换结果，返回一个列表，结果是没有经过归一化处理的
+        """参数abs=True表示输出结果是否取得绝对值"""
+        self.__init__(_list, N)
+        for m in range(self.total_m):
+            _split = self.N // 2 ** (m + 1)
+            num_each = self.N // _split
+            for _ in range(_split):
+                for __ in range(num_each // 2):
+                    temp = self.output[_ * num_each + __]
+                    temp2 = self.output[_ * num_each + __ + num_each // 2] * self._W[__ * 2 ** (self.total_m - m - 1)]
+                    self.output[_ * num_each + __] = (temp + temp2)
+                    self.output[_ * num_each + __ + num_each // 2] = (temp - temp2)
+        if abs == True:
+            for _ in range(len(self.output)):
+                self.output[_] = self.output[_].__abs__()
+        return self.output
+
 
 def record(file):
     #  录音并保存为名为file.wav，会录制一段5秒的声音在windows上存储为wav格式的音频
@@ -51,7 +103,8 @@ def enframe(data, wlen, inc):
         frameout = np.multiply(frameout, np.array(wlen))
     return frameout
 
-# 想法：自己写一个spec_x=myfft(x)，还没写[5]DCT和h_mel，别的写完了
+
+
 def mfcc_cal(spec_x, num_filter, n):
     # s是Mel滤波器能量,n是阶数，num_filter是Mel滤波器数量,求某一帧s的DCT得到的mcff系数
     res = 0
@@ -69,26 +122,26 @@ def energy_cal(spec_x, num_filter, _h_mel):  # spec_x是一帧的信号的频谱
 
 
 # 递归FFT，利用分治思想的dft
-def fft_recurrence(x):
-    x = np.asarray(x, dtype=float)
-    n = x.shape[0]
+def myfft(x):  # 需要在主函数里面提前把x补到2^L点长
+    _n = len(x)
+    _m = int(len(x) / 2)
+    s = np.zeros(_n, dtype=complex)
+    if _n == 2:
+        s[0] = x[0] + x[1]
+        s[1] = x[0] - x[1]
+    else:
+        _x1 = x[0::2]
+        _x2 = x[1::2]
+        _s1 = myfft(_x1)
+        _s2 = myfft(_x2)
+        for r in range(_m):
+            s[r] = _s1[r] + np.exp(-2j * np.pi * r / _n) * _s2[r]
+            s[r + _m] = _s1[r] - np.exp(-2j * np.pi * r / _n) * _s2[r]
+    return s
 
-    x_even = fft_recurrence(x[0::2])
-    x_odd = fft_recurrence(x[1::2])
-    factor = np.exp(-2j * np.pi * np.arange(n) / n)
 
-    return np.concatenate([x_even + factor[:int(n / 2)] * x_odd,
-                           x_even + factor[int(n / 2):] * x_odd])
-
-
-def mel(s_x, nfilt, sample_rate):
-    NFFT = 512
-    # sample_rate  采样率
-    # s_x是求过fft之后的
-    mag_frames = np.absolute(s_x)  # 求幅值
-    pow_frames = ((1.0 / NFFT) * ((mag_frames) ** 2))  # 功率谱
-
-    # 滤波器组 Filter Banks
+def mel(nfilt, sample_rate):   # ipt是一帧，对每一帧mel，帧长加到了256
+    NFFT = 256
     """
     三角滤波器，nfilt是滤波器个数，应用于功率谱以提取频带。 
     赫兹（f）和梅尔（m）之间的转换：
@@ -125,48 +178,49 @@ def mel(s_x, nfilt, sample_rate):
     filter_banks = np.where(filter_banks == 0, np.finfo(float).eps, filter_banks)  # Numerical Stability
     filter_banks = 20 * np.log10(filter_banks)  # dB
     """
-    """
-    # 画热力图
-    plt.title("filter_banks")
-    plt.imshow(np.flipud(filter_banks.T), cmap=plt.cm.jet, aspect=0.1,
-               extent=[0, filter_banks.shape[1], 0, filter_banks.shape[0]])
-    plt.xlabel("Frames", fontsize=14)
-    plt.ylabel("Dimension", fontsize=14)
-    plt.tick_params(axis='both', labelsize=14)
-    plt.savefig('filter_banks.png')
-    plt.show()
-    """
+
     return fbank
 
-
+def judge(x):
+    L = len(x)  # 信号长度
+    N = np.power(2, np.ceil(np.log2(L)))  # 下一个最近二次幂
+    for i in range (0,math.ceil(math.log2(N))):
+            new_list = np.append(x, 0)
+    return new_list
 
 def main():
     testfile = 'test.wav'
     record(testfile)
     fs, data = wavfile.read(testfile)
     print(fs)
+    print(len(data))
     print(data)
     inc = 100
     wlen = 200
-    x = enframe(data, wlen, inc)  # 分完帧了
-    # t1 = np.linspace(0, 5 * np.pi, 200)  # 时间坐标
-    # x1 = np.sin(2 * np.pi * t1)  # 正弦函数
     # 输入x,然后进行分帧，分成x[i]
-    num_frame = 200   # 每一段的帧数
-    # s_x = np.zeros(num_frame)
-    num_melfilter = 40   # 滤波器的个数
-    # for i in range(len(x)):
-    #    s_x[i] = fft_recurrence(x[i])  # 求fft变换
-    s_x = np.fft.rfft(x, 512)  # Magnitude of the FFT
-    h_mel = mel(s_x, num_melfilter, 8000)
-    s1_x = np.zeros((num_frame, num_melfilter))
-    mfcc_x = np.zeros(num_frame)
-
+    x = enframe(data, wlen, inc)  # 分完帧了
+    num_frame = int((len(data)-wlen+inc)/inc)  # 每一段的帧数
+    s_x = np.zeros((num_frame,wlen))  # s_x的每一行是一帧
+    s_x = s_x.tolist()
+    x = x.tolist()
+    num_melfilter = 40  # 滤波器的个数
+    #每一帧长200，补为256，s_x 是分帧FFT之后的
     for i in range(num_frame):
-        s1_x[i] = energy_cal(s_x[i], num_melfilter, h_mel)
-        mfcc_x[i] = mfcc_cal(s1_x[i], num_melfilter, 12)
-
+        for j in range(199,255):
+            x[i].append(0)
+        s_x[i] = FFT_pack().FFT(x[i], 256, True)  # True表示输出为abs过的
+    array = np.asarray(s_x)
+    eg_frames = array ** 2  # 能量谱
+    h_mel = mel(num_melfilter, 8000)
+    S_m = np.zeros((num_frame, 40))
+    #  print(h_mel.shape,eg_frames.shape,array.shape) 40x129  470x256  470x256
+    for i in range(num_frame):
+        S_m[i] = np.dot(eg_frames[i][0:129], h_mel.T)
+    mfcc_x = np.zeros(num_frame)
+    for i in range(num_frame):
+        mfcc_x[i] = mfcc_cal(S_m[i], num_melfilter, 12)
     print(mfcc_x)  # 输出
+
 
 if __name__ == '__main__':
     main()
