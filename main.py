@@ -5,9 +5,9 @@ import pyaudio
 import wave
 import math
 
-
+"""
 from cmath import sin, cos, pi
-
+# 可以参考，反正这个fft也能用
 class FFT_pack():
     def __init__(self, _list=[], N=0):  # _list 是传入的待计算的离散序列，N是序列采样点数，对于本方法，点数必须是2^n才可以得到正确结果
         self.list = _list  # 初始化数据
@@ -37,7 +37,7 @@ class FFT_pack():
         return out
 
     def FFT(self, _list, N, abs=True) -> list:  # 计算给定序列的傅里叶变换结果，返回一个列表，结果是没有经过归一化处理的
-        """参数abs=True表示输出结果是否取得绝对值"""
+        #参数abs=True表示输出结果是否取得绝对值
         self.__init__(_list, N)
         for m in range(self.total_m):
             _split = self.N // 2 ** (m + 1)
@@ -53,7 +53,7 @@ class FFT_pack():
                 self.output[_] = self.output[_].__abs__()
         return self.output
 
-
+"""
 def record(file):
     #  录音并保存为名为file.wav，会录制一段5秒的声音在windows上存储为wav格式的音频
     CHUNK = 1024
@@ -205,9 +205,9 @@ def main():
     for i in range(num_frame):
         for j in range(199,255):
             x[i].append(0)
-        s_x[i] = FFT_pack().FFT(x[i], 256, True)  # True表示输出为abs过的
+        s_x[i] = myfft((x[i]))
     array = np.asarray(s_x)
-    eg_frames = array ** 2  # 能量谱
+    eg_frames = np.power(np.real(s_x), 2) + np.power(np.imag(s_x), 2)  #能量谱
     h_mel = mel(num_melfilter, 8000)
     S_m = np.zeros((num_frame, 40))
     #  print(h_mel.shape,eg_frames.shape,array.shape) 40x129  470x256  470x256
