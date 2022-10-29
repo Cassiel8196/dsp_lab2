@@ -103,10 +103,10 @@ def enframe(data, wlen, inc):
 
 
 def mfcc_cal(spec_x, num_filter, n):
-    # s是Mel滤波器能量,n是阶数，num_filter是Mel滤波器数量,求某一帧s的DCT得到的mcff系数
+    # s是Mel滤波器能量,n是阶数，num_filter是Mel滤波器数量,求某一帧s的DCT得到的mcff系数,
     res = 0
     for _i in range(num_filter):
-        res = res + np.log(spec_x[_i]) * np.cos(np.pi * n * (2 * num_filter - 1) / (2 * num_filter))
+        res = res + np.log(spec_x[_i]) * np.cos(np.pi * n * (2 * _i - 1) / (2 * num_filter))
     return np.sqrt(2 / num_filter) * res
 
 
